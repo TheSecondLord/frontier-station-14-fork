@@ -1,6 +1,8 @@
 using Content.Server.DeviceNetwork.Components;
+using Content.Shared._NF.Shipyard.Components; // Frontier
 using Content.Shared.DeviceNetwork.Events;
 using JetBrains.Annotations;
+using Content.Shared.DeviceLinking;
 
 namespace Content.Server.DeviceNetwork.Systems
 {
@@ -8,6 +10,7 @@ namespace Content.Server.DeviceNetwork.Systems
     public sealed class WirelessNetworkSystem : EntitySystem
     {
         [Dependency] private readonly SharedTransformSystem _transformSystem = default!;
+        [Dependency] private readonly SharedDeviceLinkSystem _device = default!;
 
         public override void Initialize()
         {
@@ -27,11 +30,9 @@ namespace Content.Server.DeviceNetwork.Systems
             if (!TryComp<WirelessNetworkComponent>(args.Sender, out var sendingComponent))
                 return;
 
-            if (xform.MapID != args.SenderTransform.MapID
-                || (ownPosition - _transformSystem.GetWorldPosition(xform)).Length() > sendingComponent.Range)
-            {
+            // Frontier - Unlimited device range on ships. Using code from device linking to save copypasting here.
+            if (!_device.InRange(args.Sender, uid, sendingComponent.Range))
                 args.Cancel();
-            }
         }
     }
 }

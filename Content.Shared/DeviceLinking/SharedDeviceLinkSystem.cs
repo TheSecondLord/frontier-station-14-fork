@@ -1,12 +1,15 @@
-using System.Linq;
+using Content.Shared._NF.Shipyard.Components; // Frontier
 using Content.Shared.Administration.Logs;
 using Content.Shared.Database;
 using Content.Shared.DeviceLinking.Events;
 using Content.Shared.DeviceNetwork;
+using Content.Shared.EntityEffects.EffectConditions;
 using Content.Shared.Popups;
+using Content.Shared.Tag;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Timing;
 using Robust.Shared.Utility;
+using System.Linq;
 
 namespace Content.Shared.DeviceLinking;
 
@@ -17,6 +20,7 @@ public abstract class SharedDeviceLinkSystem : EntitySystem
     [Dependency] private readonly ISharedAdminLogManager _adminLogger = default!;
     [Dependency] private readonly SharedTransformSystem _transform = default!;
     [Dependency] private readonly IGameTiming _gameTiming = default!;
+    [Dependency] private readonly TagSystem _tag = default!;
 
     public const string InvokedPort = "link_port";
 
@@ -493,10 +497,31 @@ public abstract class SharedDeviceLinkSystem : EntitySystem
         return !linkAttemptEvent.Cancelled;
     }
 
-    private bool InRange(EntityUid sourceUid, EntityUid sinkUid, float range)
+    public bool InRange(EntityUid sourceUid, EntityUid sinkUid, float range) // Frontier - Make public for use in wireless network system
     {
         // TODO: This should be using an existing method and also coordinates inrange instead.
-        return _transform.GetMapCoordinates(sourceUid).InRange(_transform.GetMapCoordinates(sinkUid), range);
+        // Frontier start - Unlimited signal range on ships
+        if (_transform.GetMapCoordinates(sourceUid).InRange(_transform.GetMapCoordinates(sinkUid), range))
+            return true;
+
+        var sourceXform = Transform(sourceUid);
+        var sinkXform = Transform(sinkUid);
+        var tag = "Structure"; // EVIL BAD hardcoding because buttons and levers don't count as anchored
+
+        if (sourceXform.GridUid == null ||
+            sourceXform.GridUid != sinkXform.GridUid ||
+            // Both the source and receiver need to be either structures or anchored
+            !(sourceXform.Anchored ||
+            _tag.HasTag(sourceUid, tag) &&
+            sinkXform.Anchored ||
+            _tag.HasTag(sinkUid, tag)))
+            return false;
+
+        if (!HasComp<ShuttleDeedComponent>(sourceXform.GridUid.Value))
+            return false;
+
+        return true;
+        // Frontier end
     }
 
     private void SendNewLinkEvent(EntityUid? user, EntityUid sourceUid, string source, EntityUid sinkUid, string sink)
